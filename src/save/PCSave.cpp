@@ -2,6 +2,15 @@
 #include "common.h"
 #include "crossplatform.h"
 
+#ifdef __SWITCH__
+#include <unistd.h>   // getcwd
+// On Switch, writes to the SD card go through libnx/libounce's fsdev layer and
+// are not guaranteed to be committed to the card until fsdevCommitDevice() is
+// called. Without it a save can report success yet be lost on exit/reboot
+// ("save successful" but then "no save file"). SD_DEVICE is the default mount.
+#define SD_DEVICE "sdmc"
+#endif
+
 #include "FileMgr.h"
 #include "Font.h"
 #ifdef MORE_LANGUAGES
@@ -34,6 +43,9 @@ C_PcSave::DeleteSlot(int32 slot)
 	PcSaveHelper.nErrorCode = SAVESTATUS_SUCCESSFUL;
 	sprintf(FileName, "%s%i.b", DefaultPCSaveFileName, slot + 1);
 	DeleteFile(FileName);
+#ifdef __SWITCH__
+	fsdevCommitDevice(SD_DEVICE);
+#endif
 	SlotSaveDate[slot][0] = '\0';
 	return true;
 }
@@ -44,7 +56,16 @@ C_PcSave::SaveSlot(int32 slot)
 	MakeValidSaveName(slot);
 	PcSaveHelper.nErrorCode = SAVESTATUS_SUCCESSFUL;
 	_psGetUserFilesFolder();
+#ifdef __SWITCH__
+	{
+		char cwd[256]; cwd[0] = '\0'; getcwd(cwd, sizeof(cwd));
+		printf("[save] slot=%d cwd=%s file=%s\n", slot, cwd, ValidSaveName);
+	}
+#endif
 	int file = CFileMgr::OpenFile(ValidSaveName, "wb");
+#ifdef __SWITCH__
+	printf("[save] OpenFile(wb) -> %d\n", file);
+#endif
 	if (file != 0) {
 #ifdef MISSION_REPLAY
 		if (!IsQuickSave)
@@ -53,6 +74,13 @@ C_PcSave::SaveSlot(int32 slot)
 		if (GenericSave(file)) {
 			if (!!CFileMgr::CloseFile(file))
 				nErrorCode = SAVESTATUS_ERR_SAVE_CLOSE;
+#ifdef __SWITCH__
+			// Commit the write to the SD card so it survives exit/reboot.
+			{
+				Result rc = fsdevCommitDevice(SD_DEVICE);
+				printf("[save] fsdevCommitDevice(%s) -> 0x%x\n", SD_DEVICE, (unsigned)rc);
+			}
+#endif
 			return 0;
 		}
 
@@ -97,6 +125,12 @@ C_PcSave::PopulateSlotInfo()
 		SlotFileName[i][0] = '\0';
 		SlotSaveDate[i][0] = '\0';
 	}
+#ifdef __SWITCH__
+	{
+		char cwd[256]; cwd[0] = '\0'; getcwd(cwd, sizeof(cwd));
+		printf("[load-scan] cwd=%s base=%s\n", cwd, DefaultPCSaveFileName);
+	}
+#endif
 	for (int i = 0; i < SLOT_COUNT; i++) {
 #ifdef FIX_BUGS
 		char savename[MAX_PATH];
@@ -110,6 +144,9 @@ C_PcSave::PopulateSlotInfo()
 		} header;
 		sprintf(savename, "%s%i%s", DefaultPCSaveFileName, i + 1, ".b");
 		int file = CFileMgr::OpenFile(savename, "rb");
+#ifdef __SWITCH__
+		printf("[load-scan] slot=%d file=%s open->%d\n", i, savename, file);
+#endif
 		if (file != 0) {
 			CFileMgr::Read(file, (char*)&header, sizeof(header));
 			if (strncmp((char*)&header, TopLineEmptyFile, sizeof(TopLineEmptyFile)-1) != 0) {

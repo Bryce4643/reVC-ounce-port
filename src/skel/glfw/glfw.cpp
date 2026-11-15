@@ -119,6 +119,19 @@ void _psCreateFolder(const char *path)
 		CreateDirectory(path, nil);
 	else
 		CloseHandle(hfle);
+#elif defined(__SWITCH__)
+	// On Switch, lstat() through libnx/libounce's fsdev does not behave like it
+	// does on desktop, so the lstat-guarded mkdir below would get skipped and
+	// the folder (e.g. the "userfiles" save directory) never got created -
+	// causing saves to fail to open while still reporting success. Just create
+	// it directly; mkdir returning EEXIST when it already exists is harmless.
+	{
+		int rc = mkdir(path, 0755);
+		int e = (rc == 0) ? 0 : errno;
+		printf("[mkdir] %s -> rc=%d errno=%d\n", path, rc, e);
+		if (rc == 0 || e == EEXIST)
+			fsdevCommitDevice("sdmc");   // persist the new directory to the SD card
+	}
 #else
 	struct stat info;
 	char fullpath[PATH_MAX];
