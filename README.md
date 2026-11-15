@@ -2,9 +2,6 @@
   <img src="https://raw.githubusercontent.com/Bryce4643/reVC-ounce-port/refs/heads/main/logo_1024.png" alt="reVC Logo" width="250">
 </div>
 
-# reVC for Nintendo Switch 2 (kaiHEN)
-
-A homebrew port of **reVC** — the fan-made, fully reverse-engineered source port...
 # reVC for Nintendo Switch 2 (Usimg kaiHEN)
 
 A homebrew port of reVC (port
